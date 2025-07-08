@@ -1,81 +1,83 @@
 import { Input } from "./Input";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { verifysession } from "../../../utils/";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Loader } from "../../Dashboards/Common/Loader";
 
 export default function SignIn() {
-  let navigate = useNavigate();
+  const navigate = useNavigate();
 
-  if (localStorage.getItem("token")) {
-    verifysession();
-  }
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [loader, setLoader] = useState(false);
 
-  let login = async (event) => {
+  const login = async (event) => {
     event.preventDefault();
     setLoader(true);
-    let data = {
-      email: email,
-      password: pass,
-    };
 
-    let response = await fetch("https://hostelmanagementbackend-2tc9.onrender.com/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data)
-    });
+    try {
+      const data = { email, password: pass };
 
-    let result = await response.json();
-
-    if (result.success) {
-      localStorage.setItem("token", result.data.token);
-      let student = await fetch("https://hostelmanagementbackend-2tc9.onrender.com/api/student/get-student", {
+      const response = await fetch("https://hostelmanagementbackend-2tc9.onrender.com/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          isAdmin: result.data.user.isAdmin,
-          token: result.data.token})
+        body: JSON.stringify(data),
       });
 
-      let studentResult = await student.json();
-      if (studentResult.success) {
-        localStorage.setItem("student", JSON.stringify(studentResult.student));
-        navigate("/student-dashboard");
+      const result = await response.json();
+
+      if (result.success) {
+        const { token, user } = result.data;
+        localStorage.setItem("token", token);
+
+        const studentResponse = await fetch("https://hostelmanagementbackend-2tc9.onrender.com/api/student/get-student", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            isAdmin: user.isAdmin,
+            token: token
+          }),
+        });
+
+        const studentResult = await studentResponse.json();
+
+        if (studentResult.success) {
+          localStorage.setItem("student", JSON.stringify(studentResult.student));
+
+          // ✅ Role-based redirect
+          if (user.isAdmin) {
+            navigate("/admin-dashboard");
+          } else {
+            navigate("/student-dashboard");
+          }
+        } else {
+          toast.error("Failed to fetch user details", {
+            position: "top-right",
+            autoClose: 3000,
+            theme: "dark",
+          });
+        }
       } else {
-        // console.log(studentResult.errors)
+        toast.error(result.errors[0].msg || "Login failed", {
+          position: "top-right",
+          autoClose: 3000,
+          theme: "dark",
+        });
       }
-    } else {
-      // alert(result.errors[0].msg);
-      toast.error(
-        result.errors[0].msg, {
+    } catch (error) {
+      toast.error("Network error, try again later", {
         position: "top-right",
         autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
         theme: "dark",
-      })
+      });
+    } finally {
+      setLoader(false);
     }
-    setLoader(false);
-  };
-
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [loader, setLoader] = useState(false)
-
-  const changeEmail = (event) => {
-    setEmail(event.target.value);
-  };
-  const changePass = (event) => {
-    setPass(event.target.value);
   };
 
   const iemail = {
@@ -83,14 +85,15 @@ export default function SignIn() {
     type: "email",
     placeholder: "abc@gmail.com",
     req: true,
-    onChange: changeEmail,
+    onChange: (e) => setEmail(e.target.value),
   };
+
   const password = {
     name: "password",
     type: "password",
     placeholder: "••••••••",
     req: true,
-    onChange: changePass,
+    onChange: (e) => setPass(e.target.value),
   };
 
   return (
@@ -102,15 +105,14 @@ export default function SignIn() {
         <form className="space-y-4 md:space-y-6" onSubmit={login}>
           <Input field={iemail} />
           <Input field={password} />
+
           <div className="flex items-center justify-between">
             <div className="flex items-start">
               <div className="flex items-center h-5">
                 <input
                   id="remember"
-                  aria-describedby="remember"
                   type="checkbox"
-                  className="w-4 h-4 border rounded focus:ring-3 bg-gray-700 border-gray-600 focus:ring-blue-600 ring-offset-gray-800"
-                  required=""
+                  className="w-4 h-4 border rounded bg-gray-700 border-gray-600 focus:ring-blue-600 ring-offset-gray-800"
                 />
               </div>
               <div className="ml-3 text-sm">
@@ -120,9 +122,10 @@ export default function SignIn() {
               </div>
             </div>
           </div>
+
           <button
             type="submit"
-            className="w-full text-white focus:ring-4 focus:outline-none font-medium rounded-lg text-sm px-5 py-2.5 text-center bg-blue-600 hover:bg-blue-700 focus:ring-blue-800"
+            className="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-800 text-center"
           >
             {loader ? (
               <>
@@ -132,23 +135,14 @@ export default function SignIn() {
               <span>Sign in</span>
             )}
           </button>
-          <ToastContainer
-            position="top-right"
-            autoClose={5000}
-            hideProgressBar={false}
-            newestOnTop={false}
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="dark"
-          />
+
+          <ToastContainer />
+
           <p className="text-sm font-light text-gray-400">
             Don’t have an account yet?{" "}
             <Link
               to="/auth/request"
-              className="font-medium hover:underline text-blue-500"
+              className="font-medium text-blue-500 hover:underline"
             >
               Request an account.
             </Link>
